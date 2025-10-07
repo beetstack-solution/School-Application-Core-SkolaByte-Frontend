@@ -1,0 +1,440 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+*
+{
+    padding: 0%;
+    margin: 0%;
+    box-sizing: border-box;
+}
+
+body{
+    font-family: "Inter", sans-serif;
+}
+
+/* For WebKit browsers (Chrome, Safari) */
+::-webkit-scrollbar {
+    width: 10px; /* Width of the scrollbar */
+    height: 10px; /* Height of the scrollbar */
+}
+
+::-webkit-scrollbar-track {
+    /* background: #f1f1f1;  */
+    border-radius: 5px; /* Rounded corners for the scrollbar track */
+}
+
+::-webkit-scrollbar-thumb {
+    background: #8888884f; /* Color of the scrollbar thumb */
+    border-radius: 10px; /* Rounded corners for the scrollbar thumb */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #ccccccb4; /* Color of the scrollbar thumb on hover */
+}
+
+/* For Firefox */
+.scrollbar {
+    scrollbar-width: thin; /* Make scrollbar thin */
+    scrollbar-color: #888 #f1f1f1; /* thumb color and track color */
+}
+
+/* Optional: Style for specific scrollable containers */
+.scrollable {
+    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: calc(100vh - 4rem); /* Example max height */
+}
+a{
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+/* page header */
+.page-header
+{
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+.page-header h3{
+    font-size: 28px;
+    text-transform: capitalize;
+    font-weight: 600;
+}
+.sub-header
+{
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+.sub-header h5
+{
+    font-size: 18px;
+    text-transform: capitalize;
+    font-weight: 500;
+}
+
+/* add-btns, cancel-btns, edit-btns */
+
+.add-btn
+{
+    width: 80px;
+    height: 35px;
+    border-radius: 50px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    justify-content: center;
+    align-items: center;
+    background: #888;
+    outline: none;
+    border: none;
+    background-color: #005FA3;
+    color: #f9f9f9;
+    font-weight: 500;
+}
+.add-btn:hover{
+    background-color: #003e6b;
+    border: 1px solid #ffffff;
+}
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.3s ease-out;
+}
+
+.download-btn
+{
+    width: 220px;
+    height: 40px;
+    border-radius: 0px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    justify-content: center;
+    align-items: center;
+    background: #888;
+    outline: none;
+    border: none;
+    background-color: #04c845;
+    color: #f9f9f9;
+    font-weight: 500;
+}
+.add-btn:hover{
+    background-color: #003e6b;
+    border: 1px solid #ffffff;
+}
+
+
+
+
+
+
+
+
+.edit-btn
+{
+    width: 120px;
+    height: 35px;
+    border-radius: 50px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    justify-content: center;
+    align-items: center;
+    background: #888;
+    outline: none;
+    border: none;
+    background-color: #005FA3;
+    color: #f9f9f9;
+    font-weight: 500;
+    padding:0 10px;
+}
+.edit-btn:hover{
+    background-color: #003e6b;
+    border: 1px solid #ffffff;
+}
+.small-btn
+{
+    width: 60px;
+    height: 25px;
+    border-radius: 5px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    justify-content: center;
+    align-items: center;
+    outline: none;
+    border: none;
+    background-color: #005FA3;
+    color: #f9f9f9;
+    font-weight: 500;
+    padding:0 10px;
+}
+.small-btn:hover{
+    background-color: #003e6b;
+    border: none;
+}
+/* cancel */
+.cancel-btn
+{
+    width: 100px;
+    height: 35px;
+    border-radius: 50px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    font-weight: 500;
+    justify-content: center;
+    align-items: center;
+    background: #888;
+    outline: none;
+    border: none;
+    border: 1px solid rgb(187, 44, 0);
+    background-color: transparent;
+
+}
+.cancel-btn:hover{
+    background-color: rgba(187, 44, 0, 0.219); 
+    border: none;
+}
+
+/* submbit button */
+
+.submit-btn
+{
+    width: 100px;
+    height: 35px;
+    border-radius: 50px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    justify-content: center;
+    align-items: center;
+    outline: none;
+    border: none;
+    background-color: #003357;
+    color: #f9f9f9;
+    font-weight: 500;
+}
+.submit-btn:hover
+{
+    border: 1px solid #ffffff;
+}
+.delete-btn-small
+{
+    width: 50px;
+    height: 30px;
+    border-radius: 5px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 13px;
+    font-weight: 500;
+    justify-content: center;
+    align-items: center;
+    background: #888;
+    outline: none;
+    color: #f9f9f9;
+    border: none;
+    background-color: rgb(255, 0, 0);
+}
+/* export */
+.export-btn
+{
+    width: 50px;
+    height: 30px;
+    border-radius: 50px;
+    text-transform: capitalize;
+    display: flex;
+    font-size: 12px;
+    justify-content: center;
+    align-items: center;
+    background: #888;
+    outline: none;
+    border: none;
+    background-color: #005e0c;
+    color: #f9f9f9;
+    font-weight: 500;
+}
+.export-btn:hover
+{
+    border: 1px solid #ffffff;
+}
+.button-container
+{
+    display: flex;
+    justify-content: end;
+
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
+}
+
+.profile_dropdown_salesorder {
+    display: flex; 
+    align-items: center;
+    background-color: #0053cf60; 
+    border-radius: 30px;
+  }
+  
+  .dropimg {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px; 
+    border-radius: 50%; 
+  }
+  .submit-btnadd{
+    background-color: #07174e;
+    color: #fff;
+    font-size: 32px;
+  }
+  .removebtn{
+    font-size: 25px;
+    color: red;
+  }
+  .itemcard{
+    background-color: rgba(204, 225, 236, 0.897);
+    height: auto;
+    border-radius: 10px;
+
+  }
+  .subtext{
+    font-weight: 700;
+    font-size: 18px;
+    font-family: "Inter", sans-serif;
+  }
+  .subtext-desc
+  {
+    font-weight: 500;
+    font-size: 16px;
+    font-family: "Inter", sans-serif;
+  }
+  .total_value
+  {
+    float: right;
+    display: flex;
+    justify-content: end;
+    font-size: 16px;
+  }
+  .atext{
+    font-size: 10px;
+    color: #0011a8;
+    font-family: "Inter", sans-serif;
+  }
+  .amuttext{
+    font-weight: 800;
+    font-family: "Inter", sans-serif;
+  }
+  .bordstyle{
+    border: dotted 2px;
+  }
+  .totaltext{
+    font-size: 24px;
+    font-weight: 600;
+    font-family: "Inter", sans-serif;
+  }
+  .totalamu{
+    font-size: 24px;
+    font-weight: 600;
+    font-family: "Inter", sans-serif;
+  }
+  .mt30{
+    margin-top: 100px;
+  }
+  .itemcontainer{
+    width: 95% !important;
+    font-family: "Inter", sans-serif;
+  }
+  @media (max-width: 768px) {
+    .arowicon {
+      display: none;/* Smaller icon for smaller screens */
+    }
+    .share-arrow
+{
+  display: none;
+}
+ }
+ @keyframes gradientAnimation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.share-arrow {
+  background: linear-gradient(90deg, #ffffff, #004403, #00000060);
+  background-size: 200% 200%; /* Make it larger for smooth animation */
+  animation: gradientAnimation 2s ease infinite; /* Loop the animation */
+  color: #ffffff; /* Fallback for unsupported browsers */
+}
+.tablebg{
+  background-color: #c4c4c4;
+  min-height: 45px;
+  width: 100%;
+ border-top-right-radius: 10px;
+ border-top-left-radius: 10px;
+ color: #000;
+}
+.texttable{
+  padding: 12px 5px;
+}
+
+.zindex{
+  z-index: 999 !important;
+}
+@media (max-width: 850px) {
+.stocktable
+{
+  display: flex;
+  flex-direction: column;
+}
+.share-arrow
+{
+  display: none;
+}
+}
+
+.sticky-header thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #f9fafb; /* Match your header bg color */
+}
+
+.sticky-header-container {
+  overflow-y: auto;
+  max-height: calc(100vh - 300px); /* Adjust based on your layout */
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}

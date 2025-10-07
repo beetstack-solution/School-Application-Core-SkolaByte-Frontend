@@ -1,0 +1,26 @@
+.sidebar-bg
+{
+    background: #161c32;
+}
+.collpase_bar
+{
+    width: 75px;
+}
+
+.sidebar_li
+{
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    cursor: pointer;
+}
+.sidebar_li:hover
+{
+    background-color: #000e2754;
+}
+
+/* sidebar hr line */
+.sidebar_hr
+{
+    opacity: 0.1;
+}

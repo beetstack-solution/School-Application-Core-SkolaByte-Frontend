@@ -1,0 +1,9 @@
+/* src/assets/css/index.css */
+
+@import "./mainStyles.css";
+@import "./sidebarStyles.css";
+@import "./tableStyles.css";
+@import "./headerStyles.css";
+@import "./breadcumbStyles.css";
+@import "./searchbarStyles.css";
+/* @import "./mediaQuery.css"; */

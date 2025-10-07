@@ -1,0 +1,135 @@
+name: Docker Image CI/CD
+
+# Trigger on pushes to specific branches or manual workflow dispatch
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - demo
+      # Add other branches as needed
+  workflow_dispatch:
+    inputs:
+      custom_tag:
+        description: 'Custom tag for the Docker image'
+        required: false
+        default: ''
+      target_service:
+        description: 'Target service for deployment'
+        required: false
+        default: ''
+      build_env:
+        description: 'Build environment (production, staging, demo)'
+        required: false
+        default: ''
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Configure these values for your specific repository
+      REPOSITORY: minute-designs-team
+      BASE_IMAGE_NAME: schoolapp_frontend
+      # Optional: Define default deployment service names for each branch
+      MAIN_SERVICE: schoolapp-prod 
+      STAGING_SERVICE: schoolapp-staging 
+      DEMO_SERVICE: schoolapp-demo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up commit SHA variable
+        id: vars
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Configure branch-based variables
+        id: config
+        run: |
+          # Get the branch name
+          BRANCH_NAME=${GITHUB_REF_NAME}
+          echo "Branch is $BRANCH_NAME"
+          
+          # Set image name - this stays constant
+          IMAGE_NAME=${{ env.BASE_IMAGE_NAME }}
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+          
+          # Determine tag, deployment service and build environment based on branch
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            # Main branch
+            IMAGE_TAG="latest"
+            DEPLOYMENT_SERVICE="${{ env.MAIN_SERVICE }}"
+            BUILD_ENV="production"
+          elif [[ "$BRANCH_NAME" == "staging" ]]; then
+            # Staging branch
+            IMAGE_TAG="staging"
+            DEPLOYMENT_SERVICE="${{ env.STAGING_SERVICE }}"
+            BUILD_ENV="staging"
+          elif [[ "$BRANCH_NAME" == "demo" ]]; then
+            # Demo branch
+            IMAGE_TAG="demo"
+            DEPLOYMENT_SERVICE="${{ env.DEMO_SERVICE }}"
+            BUILD_ENV="demo"
+          else
+            # Default for other branches
+            IMAGE_TAG="branch-${BRANCH_NAME}"
+            DEPLOYMENT_SERVICE="none" # Don't deploy other branches
+            BUILD_ENV="production" # Default to production for other branches
+          fi
+          
+          # Override with manual inputs from workflow_dispatch if provided
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${{ github.event.inputs.custom_tag }}" ]]; then
+              IMAGE_TAG="${{ github.event.inputs.custom_tag }}"
+            fi
+            if [[ -n "${{ github.event.inputs.target_service }}" ]]; then
+              DEPLOYMENT_SERVICE="${{ github.event.inputs.target_service }}"
+            fi
+            if [[ -n "${{ github.event.inputs.build_env }}" ]]; then
+              BUILD_ENV="${{ github.event.inputs.build_env }}"
+            fi
+          fi
+          
+          # Set the variables for other steps
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "DEPLOYMENT_SERVICE=${DEPLOYMENT_SERVICE}" >> $GITHUB_ENV
+          echo "BUILD_ENV=${BUILD_ENV}" >> $GITHUB_ENV
+          
+          # Create full image reference
+          echo "FULL_IMAGE_NAME=ghcr.io/${{ env.REPOSITORY }}/${IMAGE_NAME}" >> $GITHUB_ENV
+          
+          # For debugging
+          echo "Configured Image: ghcr.io/${{ env.REPOSITORY }}/${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "Deployment Service: ${DEPLOYMENT_SERVICE}"
+          echo "Build Environment: ${BUILD_ENV}"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        run: |
+          # Build with the appropriate environment argument
+          docker build . --file Dockerfile \
+            --build-arg BUILD_ENV=${{ env.BUILD_ENV }} \
+            --tag ${{ env.FULL_IMAGE_NAME }}:${{ env.SHORT_SHA }} \
+            --tag ${{ env.FULL_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          
+          docker push ${{ env.FULL_IMAGE_NAME }}:${{ env.SHORT_SHA }}
+          docker push ${{ env.FULL_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+      # Optional: Deploy to your server
+      - name: Deploy to Server
+        if: env.DEPLOYMENT_SERVICE != 'none' && success()
+        run: |
+          echo "Deploying to service: ${{ env.DEPLOYMENT_SERVICE }}"
+          curl -X POST "http://minutedesigns.in:8080/deploy" \
+          -H "X-API-KEY: ${{ secrets.DEPLOY_API }}" \
+          -H "Content-Type: application/json" \
+          -d '{"service": "${{ env.DEPLOYMENT_SERVICE }}"}'

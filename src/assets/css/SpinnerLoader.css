@@ -1,0 +1,127 @@
+/* src/assets/css/SpinnerLoader.css */
+.spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.96);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+    backdrop-filter: blur(4px);
+  }
+  
+  .spinner-overlay.visible {
+    opacity: 1;
+  }
+  
+  .spinner-overlay.exiting {
+    opacity: 0;
+  }
+  
+  .spinner-content {
+    text-align: center;
+    transform: scale(0.8);
+    transition: transform 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  }
+  
+  .spinner-overlay.visible .spinner-content {
+    transform: scale(1);
+  }
+  
+  .spinner-orbits {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 30px;
+  }
+  
+  .orbit {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  
+  .outer-orbit {
+    width: 100%;
+    height: 100%;
+    border-top-color: #3b82f6;
+    border-right-color: #3b82f6;
+    animation: orbit-rotate 8s infinite linear;
+  }
+  
+  .middle-orbit {
+    width: 70%;
+    height: 70%;
+    top: 15%;
+    left: 15%;
+    border-top-color: #6366f1;
+    border-left-color: #6366f1;
+    animation: orbit-rotate 12s infinite linear reverse;
+  }
+  
+  .inner-orbit {
+    width: 40%;
+    height: 40%;
+    top: 30%;
+    left: 30%;
+    border-bottom-color: #8b5cf6;
+    border-right-color: #8b5cf6;
+    animation: orbit-rotate 16s infinite linear;
+  }
+  
+  .central-sphere {
+    position: absolute;
+    width: 20%;
+    height: 20%;
+    top: 40%;
+    left: 40%;
+    background-color: #3b82f6;
+    border-radius: 50%;
+    animation: pulse 3s ease-in-out infinite;
+  }
+  
+  .spinner-text {
+    font-size: 1.2rem;
+    color: #4b5563;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    animation: text-pulse 3.5s ease-in-out infinite;
+  }
+  
+  @keyframes orbit-rotate {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.9;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes text-pulse {
+    0%, 100% {
+      opacity: 0.8;
+      transform: translateY(0);
+    }
+    50% {
+      opacity: 1;
+      transform: translateY(-3px);
+    }
+  }

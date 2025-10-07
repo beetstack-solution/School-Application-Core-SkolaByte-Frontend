@@ -1,0 +1,25 @@
+.breadcrumb {
+    display: flex;
+    font-size: 13px;
+    /* padding: 0px 0px; */
+    margin-top: 5px;
+    margin-bottom: 5px;
+  }
+  
+  .breadcrumb-item {
+    position: relative;
+  }
+  
+  .breadcrumb-link {
+    text-decoration: none;
+    color: #005dc0; /* Bootstrap primary color */
+  }
+  
+  .breadcrumb-link:hover {
+    color: #007afc; /* Darker shade on hover */
+  }
+  
+  .breadcrumb-separator {
+    margin: 0 4px;
+  }
+  
