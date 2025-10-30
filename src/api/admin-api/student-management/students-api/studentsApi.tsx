@@ -67,9 +67,9 @@ export interface Student {
   country: string;
   zipCode: string;
   rollNumber: string;
-  class: Class;
-  division: Division;
-  academicYear: AcademicYear;
+  class: Class | string;  // Allow both Class object and string ID
+  division: Division | string;
+  academicYear: AcademicYear | string;
   dob: string;
   gender: Gender;
   sibling: boolean;

@@ -2044,14 +2044,16 @@ export interface StateApiResponse {
   data: StateData[];
 }
 
-export const getAllStates = async (): Promise<StateApiResponse> => {
+export const getAllStates = async (
+  countryId: number
+): Promise<StateApiResponse> => {
   try {
     const token = getAdminBearerToken();
     if (!token) {
       throw new Error("Authentication token is missing");
     }
     const response = await api.get<StateApiResponse>(
-      `/dd/dd-states`,
+      `/dd/dd-country-wise-state/${countryId}`,
       {
         withCredentials: true,
         headers: {
@@ -2084,11 +2086,13 @@ export interface DistrictData {
 }
 
 export interface DistrictApiResponse {
+  success: boolean;
   message: string;
-  result: DistrictData[];
+  data: DistrictData[];
 }
 
 export const getAllDistricts = async (
+  countryId: number,
   stateId: number
 ): Promise<DistrictApiResponse> => {
   const token = getAdminBearerToken();
@@ -2099,7 +2103,7 @@ export const getAllDistricts = async (
 
   try {
     const response = await api.get<DistrictApiResponse>(
-      `/dd/dd-states/${stateId}`,
+      `/dd/dd-state-wise-district/${countryId}/${stateId}`,
       {
         withCredentials: true,
         headers: {
@@ -2117,3 +2121,42 @@ export const getAllDistricts = async (
     throw new Error(errorMessage);
   }
 };
+
+// get All Country
+
+export interface CountryData {
+  countrycode: number;
+  countryname: string;
+  stdcode: number;
+  shortnm: null;
+}
+
+export interface CountryApiResponse {
+  success: boolean;
+  message: string;
+  data: CountryData[];
+}
+
+export const getAllCountry = async (): Promise<CountryApiResponse> => {
+  try {
+    const token = getAdminBearerToken();
+    if (!token) {
+      throw new Error("Authentication token is missing");
+    }
+    const response = await api.get<CountryApiResponse>(
+      `/dd/dd-all-countries`,
+      {
+        withCredentials: true,
+        headers: {
+          "x-api-key": apikey,
+          "x-app-version": appVersion,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching vehicle:', error);
+    throw error;
+  }
+}
