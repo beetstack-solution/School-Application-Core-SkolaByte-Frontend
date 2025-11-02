@@ -66,8 +66,11 @@ function ViewTeacher() {
     { label: 'View Teacher', path: '' },
   ];
 
+  // Check if teacher has location data
+  const hasLocationData = teacherData?.country || teacherData?.state || teacherData?.district || teacherData?.city;
+
   return (
-    <div className=" mx-auto p-4 md:p-6 ">
+    <div className="mx-auto p-4 md:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div className="flex-1">
           <h3 className="text-2xl font-bold text-gray-800">Teacher Details</h3>
@@ -95,7 +98,6 @@ function ViewTeacher() {
                   src={`${teacherData.imageUrl}`}
                   alt={`${teacherData.name}'s profile`}
                   className="w-full h-full object-cover rounded-md"
-                  
                 />
               </div>
             )}
@@ -138,12 +140,60 @@ function ViewTeacher() {
                   <p className="text-sm text-gray-500">Gender</p>
                   <p className="text-gray-800 capitalize">{teacherData?.gender || 'N/A'}</p>
                 </div>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <p className="text-sm text-gray-500">Address</p>
-                  <p className="text-gray-800 whitespace-pre-line">{teacherData?.address || 'N/A'}</p>
-                </div>
               </div>
             </div>
+
+            {/* Location Information */}
+            {hasLocationData && (
+              <div className="p-4">
+                <h3 className="font-medium text-gray-900 mb-3">Location Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {teacherData?.country && (
+                    <div>
+                      <p className="text-sm text-gray-500">Country</p>
+                      <p className="text-gray-800">{teacherData.country}</p>
+                    </div>
+                  )}
+                  {teacherData?.state && (
+                    <div>
+                      <p className="text-sm text-gray-500">State</p>
+                      <p className="text-gray-800">{teacherData.state}</p>
+                    </div>
+                  )}
+                  {teacherData?.district && (
+                    <div>
+                      <p className="text-sm text-gray-500">District</p>
+                      <p className="text-gray-800">{teacherData.district}</p>
+                    </div>
+                  )}
+                  {teacherData?.city && (
+                    <div>
+                      <p className="text-sm text-gray-500">City</p>
+                      <p className="text-gray-800">{teacherData.city}</p>
+                    </div>
+                  )}
+                  {teacherData?.zipCode && (
+                    <div>
+                      <p className="text-sm text-gray-500">Zip Code</p>
+                      <p className="text-gray-800">{teacherData.zipCode}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Address Information */}
+            {teacherData?.address && (
+              <div className="p-4">
+                <h3 className="font-medium text-gray-900 mb-3">Address</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Full Address</p>
+                    <p className="text-gray-800 whitespace-pre-line">{teacherData.address}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Academic Information */}
             <div className="p-4">
@@ -155,7 +205,8 @@ function ViewTeacher() {
                     {teacherData?.academicYear?.academicYear || 'N/A'}
                   </p>
                 </div>
-               
+                {teacherData?.isClassTeacher && (
+                  <>
                     <div>
                       <p className="text-sm text-gray-500">Class</p>
                       <p className="text-gray-800 capitalize">
@@ -168,7 +219,8 @@ function ViewTeacher() {
                         {teacherData?.division?.name || 'N/A'}
                       </p>
                     </div>
-                
+                  </>
+                )}
               </div>
             </div>
 
@@ -194,11 +246,11 @@ function ViewTeacher() {
                     }) : 'N/A'}
                   </p>
                 </div>
-                {teacherData?.updatedBy && (
+                {teacherData?.updatedBy && Object.keys(teacherData.updatedBy).length > 0 && (
                   <div>
                     <p className="text-sm text-gray-500">Updated By</p>
                     <p className="text-gray-800">
-                      {teacherData.updatedBy.name}
+                      {teacherData.updatedBy.name || 'N/A'}
                     </p>
                   </div>
                 )}
@@ -218,6 +270,7 @@ function ViewTeacher() {
                 )}
               </div>
             </div>
+      
           </div>
         </div>
       )}

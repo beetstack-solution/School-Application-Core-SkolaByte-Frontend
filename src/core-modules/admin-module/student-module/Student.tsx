@@ -597,10 +597,10 @@ function Students() {
       'Sl No.': index + 1,
       'Roll No.': student.rollNumber,
       'Name': `${student.firstName} ${student.lastName}`,
-      'Class': student.class?.name || 'N/A',
-      'Division': student.division?.name || 'N/A',
+      'Class': typeof student.class === 'object' && student.class ? student.class.name || 'N/A' : 'N/A',
+      'Division': typeof student.division === 'object' && student.division ? student.division.name || 'N/A' : 'N/A',
       'Status': student.status ? 'Active' : 'Inactive',
-      'Academic Year': student.academicYear?.academicYear || 'N/A',
+      'Academic Year': typeof student.academicYear === 'object' && student.academicYear ? student.academicYear.academicYear || 'N/A' : 'N/A',
       'Created At': new Date(student.createdAt).toLocaleDateString(),
     }));
     const ws = XLSX.utils.json_to_sheet(data);
