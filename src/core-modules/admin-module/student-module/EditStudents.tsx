@@ -15,7 +15,8 @@ import {
   fetchDivisionsDD,
   fetchAcademicYear,
   getAllStates,
-  getAllDistricts
+  getAllDistricts,
+  getAllCountry
 } from "@/api/common-api/commonDropDownApi";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { TbArrowBackUp } from "react-icons/tb";
@@ -29,6 +30,26 @@ import AcademicYearDropdown from "@/components/AcademicYearDropdown";
 import { getStudentsByClassDivisionAcademicYear } from "@/api/common-api/commonDropDownApi";
 import { toast } from "react-toastify";
 
+// Interface for dropdown options
+interface CountryOption {
+  countrycode: number;
+  countryname: string;
+  stdcode: number;
+}
+
+interface StateOption {
+  countryID: number;
+  stateID: number;
+  stateName: string;
+}
+
+interface DistrictOption {
+  countryID: number;
+  stateID: number;
+  cityID: number;
+  cityName: string;
+}
+
 interface FormData {
   admissionNumber: string;
   firstName: string;
@@ -38,15 +59,20 @@ interface FormData {
   houseName: string;
   city: string;
   country: string;
+  countryId: number;
   state: string;
+  stateId: number;
+  district: string;
+  districtId: number;
   zipCode: string;
   class: string;
   division: string;
   academicYear: string;
   dob: string;
   gender: Gender;
-  image?: File | string; // For the file upload
-  imageUrl?: string;     // For the preview URL
+  sibling: boolean;
+  image?: File | string;
+  imageUrl?: string;
   parentInfo: {
     fatherName: string;
     motherName: string;
@@ -71,14 +97,15 @@ const EditStudent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [classes, setClasses] = useState<any[]>([]);
-  const [divisions, setDivisions] = useState<any[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [states, setStates] = useState<string[]>([]);
-  const [districts, setDistricts] = useState<string[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [states, setStates] = useState<StateOption[]>([]);
+  const [districts, setDistricts] = useState<DistrictOption[]>([]);
   const [studentOptions, setStudentOptions] = useState<Student[]>([]);
   const [siblingsdropdown, setSiblingsDropdown] = useState<any>({
     academicYears: "",
@@ -94,11 +121,11 @@ const EditStudent: React.FC = () => {
     const locationState = location.state as { showMessage?: { text: string; type: MessageType } };
     if (locationState?.showMessage) {
       setMessage(locationState.showMessage);
-      // Clear the state to avoid showing the message again on refresh
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location, navigate]);
-  const [formData, setFormData] = useState<any>({
+
+  const [formData, setFormData] = useState<FormData>({
     admissionNumber: "",
     firstName: "",
     lastName: "",
@@ -109,6 +136,7 @@ const EditStudent: React.FC = () => {
     state: "",
     stateId: 0,
     country: "",
+    countryId: 0,
     district: "",
     districtId: 0,
     zipCode: "",
@@ -138,117 +166,138 @@ const EditStudent: React.FC = () => {
     status: true,
   });
 
-
-  console.log("formData in edit students", formData)
-
   const breadcrumbItems = [
     { label: "Home", path: "/" },
     { label: "Students", path: "/student-managements/students" },
     { label: "Edit Student", path: "" },
   ];
 
+  // Fetch dropdown data on component mount
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const [yearsData, classesData, divisionsData] = await Promise.all([
+        const [yearsData, classesData, divisionsData, countriesData] = await Promise.all([
           fetchAcademicYear(),
           fetchClasses(),
           fetchDivisionsDD(),
+          getAllCountry()
         ]);
-        setAcademicYears(yearsData.data);
-        setClasses(classesData.data);
-        setDivisions(divisionsData.data);
+
+        console.log("Countries API Response:", countriesData);
+        
+        // Use safe array access
+        setAcademicYears(getSafeArray(yearsData));
+        setClasses(getSafeArray(classesData));
+        setDivisions(getSafeArray(divisionsData));
+        
+        // Handle countries response structure
+        let countriesList: CountryOption[] = [];
+        if (countriesData && countriesData.success && countriesData.data) {
+          const data: any = countriesData.data;
+          if (Array.isArray(data)) {
+            countriesList = data;
+          } else if (data && typeof data === "object") {
+            if (Array.isArray(data.country)) {
+              countriesList = data.country;
+            } else if (
+              data.country &&
+              typeof data.country === "object" &&
+              Array.isArray((data.country as any).country)
+            ) {
+              countriesList = (data.country as any).country;
+            }
+          }
+        }
+        setCountries(countriesList);
+
       } catch (error) {
         console.error("Failed to load required data:", error);
+        setAcademicYears([]);
+        setClasses([]);
+        setDivisions([]);
+        setCountries([]);
       }
     };
 
     fetchDropdownData();
   }, []);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFormData((prev: any) => ({
-        ...prev,
-        image: file,
-        imageUrl: URL.createObjectURL(file) // Create a preview URL
-      }));
-    }
-  };
-  const fetchStates = async () => {
-    try {
-      const statesData: any = await getAllStates();
-      setStates(statesData.data);
-    } catch (error) {
-      console.error("Failed to load states:", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchStates();
-  }, []);
-
-  const fetchStudentsByClassDivisionAcademicYear = async () => {
-    if (siblingsdropdown.academicYears && siblingsdropdown.classes && siblingsdropdown.divisions) {
-      try {
-        const response: any = await getStudentsByClassDivisionAcademicYear(
-          siblingsdropdown.classes,
-          siblingsdropdown.divisions,
-          siblingsdropdown.academicYears,
-        );
-        if (response.success) {
-          setStudentOptions(response.data)
+  // Safe array access helper function
+  const getSafeArray = (data: any): any[] => {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && data.data && Array.isArray(data.data.data)) return data.data.data;
+    if (data && typeof data === 'object') {
+      for (const key in data) {
+        if (Array.isArray(data[key])) {
+          return data[key];
         }
-        else {
-          setStudentOptions([]);
-          toast.error(response.message);
-        }
-      } catch (error) {
-        console.error("Failed to fetch students:", error);
-        setStudentOptions([]);
-
-
       }
     }
+    return [];
   };
+
+  // Fetch states when country changes
   useEffect(() => {
-    fetchStudentsByClassDivisionAcademicYear();
-  }, [siblingsdropdown.academicYears, siblingsdropdown.classes, siblingsdropdown.divisions]);
+    const fetchStatesData = async () => {
+      if (formData.countryId) {
+        try {
+          const statesData: any = await getAllStates(formData.countryId);
 
-  const handleSiblingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { checked } = e.target;
-    setFormData((prev: any) => ({
-      ...prev,
-      sibling: checked,
-    }));
-    if (!checked) {
-      setSiblingsDropdown({
-        academicYears: "",
-        classes: "",
-        divisions: "",
-      });
-      setStudentOptions([]);
+          // Handle states response structure
+          let statesList: StateOption[] = [];
+          if (statesData && statesData.success && statesData.data) {
+            if (Array.isArray(statesData.data)) {
+              statesList = statesData.data;
+            }
+          }
+          setStates(statesList);
 
-
-      // Clear parent info if it was populated from sibling selection
-      setFormData((prev: any) => ({
-        ...prev,
-        parentInfo: {
-          fatherName: "",
-          motherName: "",
-          fatherContactNumber: "",
-          motherContactNumber: "",
-          fatherOccupation: "",
-          motherOccupation: "",
-          email: "",
-          password: "",
+        } catch (error) {
+          console.error("Failed to load states:", error);
+          setStates([]);
         }
-      }));
-    }
-  };
+      } else {
+        setStates([]);
+        setDistricts([]);
+      }
+    };
 
+    fetchStatesData();
+  }, [formData.countryId]);
 
+  // Fetch districts when state changes
+  useEffect(() => {
+    const fetchDistrictsData = async () => {
+      if (formData.countryId && formData.stateId) {
+        try {
+          const districtsData: any = await getAllDistricts(
+            formData.countryId,
+            formData.stateId
+          );
+
+          // Handle districts response structure
+          let districtsList: DistrictOption[] = [];
+          if (districtsData && districtsData.success && districtsData.data) {
+            if (Array.isArray(districtsData.data)) {
+              districtsList = districtsData.data;
+            }
+          }
+          setDistricts(districtsList);
+
+        } catch (error) {
+          console.error("Failed to load districts:", error);
+          setDistricts([]);
+        }
+      } else {
+        setDistricts([]);
+      }
+    };
+
+    fetchDistrictsData();
+  }, [formData.countryId, formData.stateId]);
+
+  // Fetch student data
   useEffect(() => {
     const fetchStudentData = async () => {
       if (!id) {
@@ -262,7 +311,7 @@ const EditStudent: React.FC = () => {
         if (response.success) {
           const studentData: any = response.data;
           setImagePreview(response.data.imageUrl);
-          // Format the date to YYYY-MM-DD for input field
+          
           const formattedDob = new Date(studentData.dob)
             .toISOString()
             .split("T")[0];
@@ -278,6 +327,7 @@ const EditStudent: React.FC = () => {
             state: studentData.state || "",
             stateId: studentData.stateId || 0,
             country: studentData.country || "",
+            countryId: studentData.countryId || 0,
             district: studentData.district || "",
             districtId: studentData.districtId || 0,
             zipCode: studentData.zipCode || "",
@@ -285,19 +335,14 @@ const EditStudent: React.FC = () => {
             division: studentData.division?.id || "",
             academicYear: studentData.academicYear?.id || "",
             dob: formattedDob,
-            gender:
-              studentData.gender === "Male"
-                ? Gender.MALE
-                : studentData.gender === "Female"
-                  ? Gender.FEMALE
-                  : Gender.OTHER,
+            gender: studentData.gender === "Male" ? Gender.MALE : 
+                   studentData.gender === "Female" ? Gender.FEMALE : Gender.OTHER,
+            sibling: studentData.sibling || false,
             parentInfo: {
               fatherName: studentData.parent?.fatherName || "",
               motherName: studentData.parent?.motherName || "",
-              fatherContactNumber:
-                studentData.parent?.fatherContactNumber || "",
-              motherContactNumber:
-                studentData.parent?.motherContactNumber || "",
+              fatherContactNumber: studentData.parent?.fatherContactNumber || "",
+              motherContactNumber: studentData.parent?.motherContactNumber || "",
               fatherOccupation: studentData.parent?.fatherOccupation || "",
               motherOccupation: studentData.parent?.motherOccupation || "",
               parentEmail: studentData.parent?.parentEmail || "",
@@ -308,19 +353,17 @@ const EditStudent: React.FC = () => {
               contactNumber: studentData.guardian?.contactNumber || "",
               relation: studentData.guardian?.relation || "",
               email: studentData.guardian?.email || "",
-              password: "", // Password won't be returned in the get request
+              password: "",
             },
-            status:
-              studentData.status !== undefined ? studentData.status : true,
+            status: studentData.status !== undefined ? studentData.status : true,
           });
+
         } else {
           setError(response.message || "Failed to fetch student data");
         }
       } catch (error: any) {
         console.error("Error fetching student:", error);
-        setError(
-          error.message || "An error occurred while fetching student data"
-        );
+        setError(error.message || "An error occurred while fetching student data");
       } finally {
         setIsLoading(false);
       }
@@ -329,63 +372,167 @@ const EditStudent: React.FC = () => {
     fetchStudentData();
   }, [id]);
 
-  const handleDeleteStudent = async () => {
-    if (!id) {
-      return;
-    }
-
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this student? This action cannot be undone."
-    );
-
-    if (!confirmDelete) {
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await deleteStudent(id);
-
-      if (response.success) {
-        setMessage({
-          text: "Student deleted successfully",
-          type: "success",
-        });
-
-        setTimeout(() => {
-          navigate("/student-managements/students", {
-            state: {
-              showMessage: {
-                text: "Student deleted successfully",
-                type: "success"
-              }
-            },
-            replace: true
-          });
-        }, 1000);
+  // Fetch students for sibling dropdown
+  const fetchStudentsByClassDivisionAcademicYear = async () => {
+    if (siblingsdropdown.academicYears && siblingsdropdown.classes && siblingsdropdown.divisions) {
+      try {
+        const response: any = await getStudentsByClassDivisionAcademicYear(
+          siblingsdropdown.classes,
+          siblingsdropdown.divisions,
+          siblingsdropdown.academicYears,
+        );
+        if (response.success) {
+          setStudentOptions(response.data || [])
+        } else {
+          setStudentOptions([]);
+          toast.error(response.message);
+        }
+      } catch (error) {
+        console.error("Failed to fetch students:", error);
+        setStudentOptions([]);
       }
-    } catch (error: any) {
-      console.error("Error deleting student:", error);
-
-      if (error.message.includes("Academic Year Mapping with ID") && error.message.includes("not found")) {
-        setTimeout(() => {
-          navigate("/student-managements/students", { replace: false });
-        }, 3000);
-      }
-    } finally {
-      setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchStudentsByClassDivisionAcademicYear();
+  }, [siblingsdropdown.academicYears, siblingsdropdown.classes, siblingsdropdown.divisions]);
+
+  // Event Handlers
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFormData((prev: any) => ({
+        ...prev,
+        image: file,
+        imageUrl: URL.createObjectURL(file)
+      }));
+    }
+  };
+
+  const handleSiblingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { checked } = e.target;
+    setFormData((prev: any) => ({
+      ...prev,
+      sibling: checked,
+    }));
+    if (!checked) {
+      setSiblingsDropdown({
+        academicYears: "",
+        classes: "",
+        divisions: "",
+      });
+      setStudentOptions([]);
+      setFormData((prev: any) => ({
+        ...prev,
+        parentInfo: {
+          fatherName: "",
+          motherName: "",
+          fatherContactNumber: "",
+          motherContactNumber: "",
+          fatherOccupation: "",
+          motherOccupation: "",
+          parentEmail: "",
+          password: "",
+        }
+      }));
+    }
+  };
+
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedCountryId = parseInt(e.target.value);
+    const selectedCountry = countries.find(
+      (country) => country.countrycode === selectedCountryId
+    );
+
+    setFormData((prev: any) => ({
+      ...prev,
+      country: selectedCountry ? selectedCountry.countryname : "",
+      countryId: selectedCountryId || 0,
+      state: "",
+      stateId: 0,
+      district: "",
+      districtId: 0,
+    }));
+  };
+
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedStateId = parseInt(e.target.value);
+    const selectedState = states.find(
+      (state) => state.stateID === selectedStateId
+    );
+
+    setFormData((prev: any) => ({
+      ...prev,
+      state: selectedState ? selectedState.stateName : "",
+      stateId: selectedStateId || 0,
+      district: "",
+      districtId: 0,
+    }));
+  };
+
+  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedDistrictId = parseInt(e.target.value);
+    const selectedDistrict = districts.find(
+      (district) => district.cityID === selectedDistrictId
+    );
+
+    setFormData((prev: any) => ({
+      ...prev,
+      district: selectedDistrict ? selectedDistrict.cityName : "",
+      districtId: selectedDistrictId || 0,
+    }));
+  };
+
+  const handleSiblingAcademicYearChange = (value: string) => {
+    setSiblingsDropdown((prev: any) => ({
+      ...prev,
+      academicYears: value
+    }));
+  };
+
+  const handleSiblingClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSiblingsDropdown((prev: any) => ({
+      ...prev,
+      classes: e.target.value
+    }));
+  };
+
+  const handleSiblingDivisionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSiblingsDropdown((prev: any) => ({
+      ...prev,
+      divisions: e.target.value
+    }));
+  };
+
+  const handleStudentSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedStudentId = e.target.value;
+    if (!selectedStudentId) return;
+
+    const selectedStudent: any = studentOptions.find(student => student._id === selectedStudentId);
+    if (!selectedStudent) return;
+
+    setFormData((prev: any) => ({
+      ...prev,
+      parentInfo: {
+        ...prev.parentInfo,
+        fatherName: selectedStudent.parentInfo.fatherName || "",
+        motherName: selectedStudent.parentInfo.motherName || "",
+        fatherContactNumber: selectedStudent.parentInfo.fatherContactNumber || "",
+        motherContactNumber: selectedStudent.parentInfo.motherContactNumber || "",
+        fatherOccupation: selectedStudent.parentInfo.fatherOccupation || "",
+        motherOccupation: selectedStudent.parentInfo.motherOccupation || "",
+        parentEmail: selectedStudent.parentInfo.email || "",
+        password: selectedStudent.parentInfo.plainPassword || "",
+      }
+    }));
+  };
+
   const handleInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
 
-    // Handle nested objects
     if (name.includes(".")) {
       const [parent, child] = name.split(".");
       setFormData((prev: any) => ({
@@ -400,12 +547,24 @@ const EditStudent: React.FC = () => {
     }
   };
 
+  const calculateAge = (dob: string) => {
+    const birthDate = new Date(dob);
+    const today = new Date();
+
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    return age.toString();
+  };
+
   const validateForm = () => {
-    // Check required fields
     if (
       !formData.firstName ||
       !formData.lastName ||
-      // !formData.rollNumber ||
       !formData.dob ||
       !formData.class ||
       !formData.division ||
@@ -416,7 +575,12 @@ const EditStudent: React.FC = () => {
       !formData.parentInfo.motherContactNumber ||
       !formData.parentInfo.parentEmail ||
       !formData.houseName ||
-      !formData.age
+      !formData.age ||
+      !formData.countryId ||
+      !formData.stateId ||
+      !formData.districtId ||
+      !formData.city ||
+      !formData.zipCode
     ) {
       setMessage({
         text: "Please fill all required fields",
@@ -425,7 +589,6 @@ const EditStudent: React.FC = () => {
       return false;
     }
 
-    // Validate contact numbers
     const contactFields = [
       {
         field: formData.parentInfo.fatherContactNumber,
@@ -458,7 +621,6 @@ const EditStudent: React.FC = () => {
       return false;
     }
 
-    // Validate email formats if provided (only when email is not empty)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (
@@ -501,130 +663,53 @@ const EditStudent: React.FC = () => {
 
     return true;
   };
-  const calculateAge = (dob: string) => {
-    const birthDate = new Date(dob);
-    const today = new Date();
 
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+  const handleDeleteStudent = async () => {
+    if (!id) {
+      return;
     }
 
-    return age.toString();
-  };
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this student? This action cannot be undone."
+    );
 
-
-  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedStateId = Number(e.target.value);
-    const selectedState: any = states.find((state: any) => state.id === selectedStateId);
-
-    setFormData((prev:any) => ({
-      ...prev,
-      state: selectedState?.name || "",
-      stateId: selectedStateId,
-      district: "",
-      districtId: 0
-    }));
-
-    if (selectedStateId) {
-      fetchDistricts(selectedStateId);
-    } else {
-      setDistricts([]);
+    if (!confirmDelete) {
+      return;
     }
-  };
 
-  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedDistrictId = Number(e.target.value);
-    const selectedDistrict: any = districts.find((district: any) => district.id === selectedDistrictId);
+    setIsLoading(true);
 
-    setFormData((prev: any) => ({
-      ...prev,
-      district: selectedDistrict?.name || "",
-      districtId: selectedDistrictId
-    }));
-  };
-
-
-  const handleSiblingAcademicYearChange = (value: string) => {
-    setSiblingsDropdown((prev: any) => ({
-      ...prev,
-      academicYears: value
-    }));
-  };
-
-  const handleSiblingClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSiblingsDropdown((prev: any) => ({
-      ...prev,
-      classes: e.target.value
-    }));
-  };
-  const handleSiblingDivisionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSiblingsDropdown((prev: any) => ({
-      ...prev,
-      divisions: e.target.value
-    }));
-  };
-
-
-  const handleStudentSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedStudentId = e.target.value;
-    if (!selectedStudentId) return;
-
-
-    // Find the selected student from studentOptions
-    const selectedStudent: any = studentOptions.find(student => student._id === selectedStudentId);
-    if (!selectedStudent) return;
-
-
-    // Update the form data with the parent info from selected student
-    setFormData((prev: any) => ({
-      ...prev,
-      parentInfo: {
-        ...prev.parentInfo,
-        fatherName: selectedStudent.parentInfo.fatherName || "",
-        motherName: selectedStudent.parentInfo.motherName || "",
-        fatherContactNumber: selectedStudent.parentInfo.fatherContactNumber || "",
-        motherContactNumber: selectedStudent.parentInfo.motherContactNumber || "",
-        fatherOccupation: selectedStudent.parentInfo.fatherOccupation || "",
-        motherOccupation: selectedStudent.parentInfo.motherOccupation || "",
-        email: selectedStudent.parentInfo.email || "",
-        password: selectedStudent.parentInfo.plainPassword || "", // Don't copy password as it's hashed and shouldn't be exposed
-        // Don't copy password as it's hashed and shouldn't be exposed
-      }
-    }));
-  };
-
-  const fetchDistricts = async (stateId: number) => {
     try {
-      console.log("Fetching districts for state ID:", stateId); // Debug log
-      const districtsData: any = await getAllDistricts(stateId);
-      console.log("Districts API response:", districtsData); // Debug log
+      const response = await deleteStudent(id);
 
-      if (districtsData.result) {
-        setDistricts(districtsData.result);
-        console.log("Districts set in state:", districtsData.result); // Debug log
-      } else {
-        console.error("Unexpected districts data format:", districtsData);
-        setDistricts([]);
+      if (response.success) {
+        setMessage({
+          text: "Student deleted successfully",
+          type: "success",
+        });
+
+        setTimeout(() => {
+          navigate("/student-managements/students", {
+            state: {
+              showMessage: {
+                text: "Student deleted successfully",
+                type: "success"
+              }
+            },
+            replace: true
+          });
+        }, 1000);
       }
-    } catch (error) {
-      console.error("Failed to load districts:", error);
-      setDistricts([]);
+    } catch (error: any) {
+      console.error("Error deleting student:", error);
+      setMessage({
+        text: error.message || "Failed to delete student",
+        type: "error",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
-  useEffect(() => {
-    fetchStates();
-
-  }, []);
-  useEffect(() => {
-    if (formData.stateId) {
-      fetchDistricts(formData.stateId);
-    } else {
-      setDistricts([]);
-    }
-  }, [formData.stateId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -639,21 +724,18 @@ const EditStudent: React.FC = () => {
       const formDataToSend = new FormData();
 
       // Append student basic information
-      formDataToSend.append("firstName",
-        formData.firstName
-          ? formData.firstName.charAt(0).toUpperCase() + formData.firstName.slice(1)
-          : ""
-      );
+      formDataToSend.append("firstName", formData.firstName ? formData.firstName.charAt(0).toUpperCase() + formData.firstName.slice(1) : "");
       formDataToSend.append("lastName", formData.lastName ? formData.lastName.charAt(0).toUpperCase() + formData.lastName.slice(1) : "");
       formDataToSend.append('rollNumber', formData.rollNumber);
       formDataToSend.append('age', formData.age);
       formDataToSend.append('houseName', formData.houseName);
       formDataToSend.append('city', formData.city);
       formDataToSend.append('state', formData.state);
-      formDataToSend.append('stateId', (formData.stateId));
+      formDataToSend.append('stateId', formData.stateId.toString());
       formDataToSend.append('district', formData.district);
-      formDataToSend.append('districtId', (formData.districtId));
+      formDataToSend.append('districtId', formData.districtId.toString());
       formDataToSend.append('country', formData.country);
+      formDataToSend.append('countryId', formData.countryId.toString());
       formDataToSend.append('zipCode', formData.zipCode);
       formDataToSend.append('class', formData.class);
       formDataToSend.append('division', formData.division);
@@ -661,6 +743,7 @@ const EditStudent: React.FC = () => {
       formDataToSend.append('dob', formData.dob);
       formDataToSend.append('gender', formData.gender);
       formDataToSend.append('status', String(formData.status));
+      formDataToSend.append('sibling', String(formData.sibling || false));
 
       // Append parent information
       formDataToSend.append('parentInfo[fatherName]', formData.parentInfo.fatherName);
@@ -763,67 +846,56 @@ const EditStudent: React.FC = () => {
       >
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-medium border-b pb-2 mb-4 p-2 bg-green-50">
-
             Student Information
           </h3>
           <div>
-            <div className="p-3">
-              <div className="flex flex-col md:flex-row items-center gap-5">
-                {/* Image Preview */}
-                <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
-                  <img
-                    src={formData.imageUrl || `${imagePreview}`}
-                    alt="Student"
-                    className="w-full h-full object-cover"
-                    onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                      const target = e.target as HTMLImageElement;
-                      target.onerror = null; // prevents infinite loop if default image also fails
-                      target.src = 'https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?uid=R175445859&ga=GA1.1.662587032.1739548584&semt=ais_hybrid&w=740';
-                    }}
-                  />
-                </div>
+            <div className="flex flex-col md:flex-row items-center gap-5">
+              {/* Image Preview */}
+              <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
+                <img
+                  src={formData.imageUrl || `${imagePreview}`}
+                  alt="Student"
+                  className="w-full h-full object-cover"
+                  onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.src = 'https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?uid=R175445859&ga=GA1.1.662587032.1739548584&semt=ais_hybrid&w=740';
+                  }}
+                />
+              </div>
 
-                {/* Upload Controls */}
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Upload Student Photo
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-
-                    className="block w-full text-sm text-gray-500
-          file:mr-4 file:py-2 file:px-4
-          file:rounded-md file:border-0
-          file:text-sm file:font-semibold
-          file:bg-blue-50 file:text-blue-700
-          hover:file:bg-blue-100"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    JPEG, PNG, or JPG (Max. 2MB)
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Admission Number
-                  </label>
-                  <input
-
-                    value={formData.admissionNumber}
-                    disabled
-
-                    className="w-full p-2 border border-gray-300  text-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-                  />
-
-                </div>
-
+              {/* Upload Controls */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Student Photo
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  JPEG, PNG, or JPG (Max. 2MB)
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Admission Number
+                </label>
+                <input
+                  value={formData.admissionNumber}
+                  disabled
+                  className="w-full p-2 border border-gray-300 text-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
             </div>
           </div>
-
-
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div>
@@ -839,7 +911,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -862,7 +933,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -872,22 +942,8 @@ const EditStudent: React.FC = () => {
                 required
               />
             </div>
-            {/* <div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Roll Number <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="rollNumber"
-                value={formData.rollNumber}
-                onChange={handleInputChange}
-                placeholder="Enter roll number"
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div> */}
-            <div className="w-full  px-2 mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
                 Date of Birth <span className="text-red-500">*</span>
               </label>
               <input
@@ -895,18 +951,18 @@ const EditStudent: React.FC = () => {
                 name="dob"
                 value={formData.dob}
                 onChange={(e) => {
-                  handleInputChange(e); // Call the original handler
+                  handleInputChange(e);
                   if (e.target.value) {
                     const age = calculateAge(e.target.value);
-                    setFormData((prev:any) => ({ ...prev, age }));
+                    setFormData((prev: any) => ({ ...prev, age }));
                   }
                 }}
-                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
-            <div className="w-full  px-2 mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Age <span className="text-red-500">*</span>
               </label>
               <input
@@ -914,7 +970,7 @@ const EditStudent: React.FC = () => {
                 name="age"
                 value={formData.age}
                 readOnly
-                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-100"
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-100"
                 required
               />
             </div>
@@ -935,101 +991,83 @@ const EditStudent: React.FC = () => {
               </select>
             </div>
 
+            {/* Country Dropdown */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Country <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                name="country"
-                value={formData.country}
-                onChange={handleInputChange}
-                onKeyDown={(e) => {
-                  const key = e.key;
-                  const isLetter = /^[a-zA-Z]$/.test(key);
-                  const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-                  if (!isLetter && !allowedKeys.includes(key)) {
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="Enter country"
+              <select
+                name="countryId"
+                value={formData.countryId || ""}
+                onChange={handleCountryChange}
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
+              >
+                <option value="">Select Country</option>
+                {Array.isArray(countries) && countries.map((country) => (
+                  <option key={country.countrycode} value={country.countrycode}>
+                    {country.countryname}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="hidden"
+                name="country"
+                value={formData.country}
               />
             </div>
+
+            {/* State Dropdown */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 State <span className="text-red-500">*</span>
               </label>
-              {/* <input
-                type="text"
-                name="state"
-                value={formData.state}
-                onChange={handleInputChange}
-                onKeyDown={(e) => {
-                  const key = e.key;
-                  const isLetter = /^[a-zA-Z]$/.test(key);
-                  const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-                  if (!isLetter && !allowedKeys.includes(key)) {
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="Enter state"
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              /> */}
               <select
-                name="state"
-                value={formData.stateId}
+                name="stateId"
+                value={formData.stateId || ""}
                 onChange={handleStateChange}
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
+                disabled={!formData.countryId}
               >
                 <option value="">Select State</option>
-                {states.map((state:any) => (
-                  <option key={state.id} value={state.id}>
-                    {state.name}
+                {Array.isArray(states) && states.map((state) => (
+                  <option key={state.stateID} value={state.stateID}>
+                    {state.stateName}
                   </option>
                 ))}
               </select>
+              <input type="hidden" name="state" value={formData.state} />
             </div>
 
-
-
-            {/* District Select */}
-            <div >
-              <label className="block text-gray-700 text-sm font-bold mb-2">
+            {/* District Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 District <span className="text-red-500">*</span>
               </label>
               <select
                 name="districtId"
                 value={formData.districtId || ""}
                 onChange={handleDistrictChange}
-                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
                 disabled={!formData.stateId}
               >
                 <option value="">Select District</option>
-                {districts.length > 0 ? (
-                  districts.map((district: any) => (
-                    <option key={district.id} value={district.id}>
-                      {district.name}
-                    </option>
-                  ))
-                ) : (
-                  formData.stateId && <option value="" disabled>No districts found</option>
-                )}
+                {Array.isArray(districts) && districts.map((district) => (
+                  <option key={district.cityID} value={district.cityID}>
+                    {district.cityName}
+                  </option>
+                ))}
               </select>
               <input
                 type="hidden"
                 name="district"
-                value={formData.district || ""}
+                value={formData.district}
               />
             </div>
 
-            <div >
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 City <span className="text-red-500">*</span>
               </label>
@@ -1042,7 +1080,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -1063,11 +1100,8 @@ const EditStudent: React.FC = () => {
                 value={formData.zipCode}
                 onChange={handleInputChange}
                 onKeyDown={(e) => {
-                  const allowedKeys = [
-                    'Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'
-                  ];
+                  const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
                   const isNumberKey = /^[0-9]$/.test(e.key);
-
                   if (!isNumberKey && !allowedKeys.includes(e.key)) {
                     e.preventDefault();
                   }
@@ -1086,19 +1120,14 @@ const EditStudent: React.FC = () => {
                 name="houseName"
                 value={formData.houseName}
                 onChange={handleInputChange}
-                placeholder="Enter houseName"
+                placeholder="Enter house name"
                 rows={3}
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
-
           </div>
         </div>
-
-
-
-
 
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-medium border-b pb-2 mb-4 p-2 bg-green-50">
@@ -1109,20 +1138,6 @@ const EditStudent: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Academic Year <span className="text-red-500">*</span>
               </label>
-              {/* <select
-                name="academicYear"
-                value={formData.academicYear}
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="">Select Academic Year</option>
-                {academicYears.map((year) => (
-                  <option key={year._id} value={year._id}>
-                    {year.academicYear}
-                  </option>
-                ))}
-              </select> */}
               <AcademicYearDropdown
                 value={formData.academicYear}
                 onChange={(value) => {
@@ -1130,7 +1145,6 @@ const EditStudent: React.FC = () => {
                 }}
                 disabled={true}
               />
-
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1144,7 +1158,7 @@ const EditStudent: React.FC = () => {
                 required
               >
                 <option value="">Select Class</option>
-                {classes.map((cls) => (
+                {Array.isArray(classes) && classes.map((cls) => (
                   <option key={cls._id} value={cls._id}>
                     {cls.name}
                   </option>
@@ -1163,7 +1177,7 @@ const EditStudent: React.FC = () => {
                 required
               >
                 <option value="">Select Division</option>
-                {divisions.map((division) => (
+                {Array.isArray(divisions) && divisions.map((division) => (
                   <option key={division._id} value={division._id}>
                     {division.name}
                   </option>
@@ -1191,7 +1205,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -1214,7 +1227,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -1236,7 +1248,6 @@ const EditStudent: React.FC = () => {
                 onKeyDown={(e) => {
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
                   const isNumberKey = /^[0-9]$/.test(e.key);
-
                   if (!isNumberKey && !allowedKeys.includes(e.key)) {
                     e.preventDefault();
                   }
@@ -1259,7 +1270,6 @@ const EditStudent: React.FC = () => {
                 onKeyDown={(e) => {
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
                   const isNumberKey = /^[0-9]$/.test(e.key);
-
                   if (!isNumberKey && !allowedKeys.includes(e.key)) {
                     e.preventDefault();
                   }
@@ -1283,7 +1293,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -1305,7 +1314,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -1316,32 +1324,31 @@ const EditStudent: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Parent's Email {/* Removed required indicator */}
+                Parent's Email
               </label>
               <input
                 type="email"
-                name="parentInfo.email"
+                name="parentInfo.parentEmail"
                 value={formData.parentInfo.parentEmail}
                 onChange={handleInputChange}
                 placeholder="Enter parent's email"
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              // Removed required attribute
               />
             </div>
-            {/* <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Parent's Password
-  </label>
-  <input
-    type="password"
-    name="parentInfo.password"
-    value={formData.parentInfo.password}
-    onChange={handleInputChange}
-    placeholder="Enter Password"
-    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-  />
-  <p className="text-xs text-gray-500 mt-1">Leave blank to keep existing password</p>
-</div> */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Parent's Password
+              </label>
+              <input
+                type="password"
+                name="parentInfo.password"
+                value={formData.parentInfo.password}
+                onChange={handleInputChange}
+                placeholder="Enter Password"
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Leave blank to keep existing password</p>
+            </div>
           </div>
         </div>
 
@@ -1363,7 +1370,6 @@ const EditStudent: React.FC = () => {
                   const key = e.key;
                   const isLetter = /^[a-zA-Z]$/.test(key);
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
                   if (!isLetter && !allowedKeys.includes(key)) {
                     e.preventDefault();
                   }
@@ -1384,7 +1390,6 @@ const EditStudent: React.FC = () => {
                 onKeyDown={(e) => {
                   const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
                   const isNumberKey = /^[0-9]$/.test(e.key);
-
                   if (!isNumberKey && !allowedKeys.includes(e.key)) {
                     e.preventDefault();
                   }
@@ -1419,7 +1424,6 @@ const EditStudent: React.FC = () => {
                 placeholder="Enter guardian's email"
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              {/* <p className="text-xs text-gray-500 mt-1">Leave blank to keep existing email</p> */}
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">

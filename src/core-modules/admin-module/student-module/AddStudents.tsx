@@ -7,14 +7,15 @@ import {
   AcademicYear,
   Parent,
   Guardian,
-  bulkImportStudents
+  bulkImportStudents,
 } from "@/api/admin-api/student-management/students-api/studentsApi";
 import {
   fetchClasses,
   fetchDivisionsDD,
   fetchAcademicYear,
   getAllStates,
-  getAllDistricts
+  getAllDistricts,
+  getAllCountry,
 } from "@/api/common-api/commonDropDownApi";
 import { Link, useNavigate } from "react-router-dom";
 import { TbArrowBackUp } from "react-icons/tb";
@@ -29,6 +30,41 @@ import AcademicYearDropdown from "@/components/AcademicYearDropdown";
 import { FaFileExcel } from "react-icons/fa";
 import { getStudentsByClassDivisionAcademicYear } from "@/api/common-api/commonDropDownApi";
 
+// Interface for dropdown options
+interface CountryOption {
+  countrycode: number;
+  countryname: string;
+  stdcode: number;
+}
+
+interface StateOption {
+  countryID: number;
+  stateID: number;
+  stateName: string;
+}
+
+interface DistrictOption {
+  countryID: number;
+  stateID: number;
+  cityID: number;
+  cityName: string;
+}
+
+// Extended Student interface to include address fields
+interface ExtendedStudent extends Student {
+  country: string;
+  countryId?: number;
+  state: string;
+  stateId?: number;
+  district?: string;
+  districtId?: number;
+  city: string;
+  // Remove these since they already exist in Student with different types
+  // class?: string;     // Remove - conflicts with Student.class
+  // division?: string;  // Remove - conflicts with Student.division
+  // academicYear?: string; // Remove - conflicts with Student.academicYear
+  admissionNumber?: string;
+}
 
 const AddStudent: React.FC = () => {
   const navigate = useNavigate();
@@ -38,15 +74,14 @@ const AddStudent: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [states, setStates] = useState<string[]>([]);
-  const [selectedState, setSelectedState] = useState<string>("");
-  const [districts, setDistricts] = useState<string[]>([]);
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [states, setStates] = useState<StateOption[]>([]);
+  const [districts, setDistricts] = useState<DistrictOption[]>([]);
   const [message, setMessage] = useState<{
     text: string;
     type: MessageType;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
+  const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
   const [studentOptions, setStudentOptions] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
   const [siblingsdropdown, setSiblingsDropdown] = useState<any>({
@@ -54,7 +89,9 @@ const AddStudent: React.FC = () => {
     classes: "",
     divisions: "",
   });
-  const [formData, setFormData] = useState<Partial<any>>({
+  const [formData, setFormData] = useState<
+    Partial<ExtendedStudent> & { parentInfo: Parent; guardian: Guardian }
+  >({
     firstName: "",
     lastName: "",
     rollNumber: "",
@@ -63,7 +100,8 @@ const AddStudent: React.FC = () => {
     city: "",
     state: "",
     stateId: 0,
-    country: "India",
+    country: "",
+    countryId: 0,
     district: "",
     districtId: 0,
     zipCode: "",
@@ -99,48 +137,138 @@ const AddStudent: React.FC = () => {
     { label: "Add Student", path: "" },
   ];
 
-
-
-
   console.log("formData", formData);
   console.log("sibling", formData.sibling);
   console.log("selectedStudents", selectedStudents);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [yearsData, classesData, divisionsData] = await Promise.all([
-          fetchAcademicYear(),
-          fetchClasses(),
-          fetchDivisionsDD(),
-        ]);
+        const [yearsData, classesData, divisionsData, countriesData] =
+          await Promise.all([
+            fetchAcademicYear(),
+            fetchClasses(),
+            fetchDivisionsDD(),
+            getAllCountry(),
+          ]);
         setAcademicYears(yearsData.data as any);
         setClasses(classesData.data as any);
         setDivisions(divisionsData.data as any);
+
+        // Handle countries response structure
+        let countriesList: CountryOption[] = [];
+        if (countriesData && countriesData.success && countriesData.data) {
+          const data: any = countriesData.data; // cast to any to inspect runtime shape safely
+          if (Array.isArray(data)) {
+            countriesList = data;
+          } else if (data && typeof data === "object") {
+            // common shape: { country: [...] }
+            if (Array.isArray(data.country)) {
+              countriesList = data.country;
+            } else if (
+              data.country &&
+              typeof data.country === "object" &&
+              Array.isArray((data.country as any).country)
+            ) {
+              // nested shape fallback: { country: { country: [...] } }
+              countriesList = (data.country as any).country;
+            }
+          }
+        }
+        setCountries(countriesList);
+
+        // Set default country to India if available
+        const indiaCountry = countriesList.find(
+          (country) => country.countryname.toLowerCase() === "india"
+        );
+        if (indiaCountry) {
+          setFormData((prev) => ({
+            ...prev,
+            country: indiaCountry.countryname,
+            countryId: indiaCountry.countrycode,
+          }));
+        }
       } catch (error) {
         console.error("Failed to load required data:", error);
       }
     };
 
-
     fetchData();
   }, []);
-  const fetchStates = async () => {
-    try {
-      const statesData: any = await getAllStates();
-      setStates(statesData.data);
-    } catch (error) {
-      console.error("Failed to load states:", error);
-    }
-  };
 
-
-
+  // Fetch states when country changes
   useEffect(() => {
-    fetchStates();
-  }, []);
+    const fetchStatesData = async () => {
+      if (formData.countryId) {
+        try {
+          const statesData: any = await getAllStates(formData.countryId);
 
+          // Handle states response structure
+          let statesList: StateOption[] = [];
+          if (statesData && statesData.success && statesData.data) {
+            if (Array.isArray(statesData.data)) {
+              statesList = statesData.data;
+            }
+          }
+          setStates(statesList);
 
+          // Reset state and district when country changes
+          setFormData((prev) => ({
+            ...prev,
+            state: "",
+            stateId: 0,
+            district: "",
+            districtId: 0,
+          }));
+          setDistricts([]);
+        } catch (error) {
+          console.error("Failed to load states:", error);
+        }
+      } else {
+        setStates([]);
+        setDistricts([]);
+      }
+    };
 
+    fetchStatesData();
+  }, [formData.countryId]);
+
+  // Fetch districts when state changes
+  useEffect(() => {
+    const fetchDistrictsData = async () => {
+      if (formData.countryId && formData.stateId) {
+        try {
+          const districtsData: any = await getAllDistricts(
+            formData.countryId,
+            formData.stateId
+          );
+
+          // Handle districts response structure
+          let districtsList: DistrictOption[] = [];
+          if (districtsData && districtsData.success && districtsData.data) {
+            if (Array.isArray(districtsData.data)) {
+              districtsList = districtsData.data;
+            }
+          }
+          setDistricts(districtsList);
+
+          // Reset district when state changes
+          setFormData((prev) => ({
+            ...prev,
+            district: "",
+            districtId: 0,
+          }));
+        } catch (error) {
+          console.error("Failed to load districts:", error);
+          setDistricts([]);
+        }
+      } else {
+        setDistricts([]);
+      }
+    };
+
+    fetchDistrictsData();
+  }, [formData.countryId, formData.stateId]);
 
   const handleSiblingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { checked } = e.target;
@@ -156,9 +284,8 @@ const AddStudent: React.FC = () => {
       });
       setStudentOptions([]);
 
-
       // Clear parent info if it was populated from sibling selection
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         parentInfo: {
           fatherName: "",
@@ -169,156 +296,142 @@ const AddStudent: React.FC = () => {
           motherOccupation: "",
           email: "",
           password: "",
-        }
+        },
       }));
     }
   };
 
-
-  console.log("typeof siblings", typeof formData.sibling);
   const handleSiblingAcademicYearChange = (value: string) => {
     setSiblingsDropdown((prev: any) => ({
       ...prev,
-      academicYears: value
+      academicYears: value,
     }));
   };
 
-
-  const handleSiblingClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleSiblingClassChange = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     setSiblingsDropdown((prev: any) => ({
       ...prev,
-      classes: e.target.value
+      classes: e.target.value,
     }));
   };
 
-
-  const handleSiblingDivisionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleSiblingDivisionChange = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     setSiblingsDropdown((prev: any) => ({
       ...prev,
-      divisions: e.target.value
+      divisions: e.target.value,
+    }));
+  };
+
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedCountryId = parseInt(e.target.value);
+    const selectedCountry = countries.find(
+      (country) => country.countrycode === selectedCountryId
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      country: selectedCountry ? selectedCountry.countryname : "",
+      countryId: selectedCountryId || 0,
+      state: "",
+      stateId: 0,
+      district: "",
+      districtId: 0,
     }));
   };
 
   const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedStateId = Number(e.target.value);
-    const selectedState: any = states.find((state: any) => state.id === selectedStateId);
+    const selectedStateId = parseInt(e.target.value);
+    const selectedState = states.find(
+      (state) => state.stateID === selectedStateId
+    );
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      state: selectedState?.name || "",
-      stateId: selectedStateId,
+      state: selectedState ? selectedState.stateName : "",
+      stateId: selectedStateId || 0,
       district: "",
-      districtId: 0
+      districtId: 0,
     }));
-
-    if (selectedStateId) {
-      fetchDistricts(selectedStateId);
-    } else {
-      setDistricts([]);
-    }
   };
 
-  const fetchDistricts = async (stateId: number) => {
-    try {
-      console.log("Fetching districts for state ID:", stateId); // Debug log
-      const districtsData: any = await getAllDistricts(stateId);
-      console.log("Districts API response:", districtsData); // Debug log
+  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedDistrictId = parseInt(e.target.value);
+    const selectedDistrict = districts.find(
+      (district) => district.cityID === selectedDistrictId
+    );
 
-      if (districtsData.result) {
-        setDistricts(districtsData.result);
-        console.log("Districts set in state:", districtsData.result); // Debug log
-      } else {
-        console.error("Unexpected districts data format:", districtsData);
-        setDistricts([]);
-      }
-    } catch (error) {
-      console.error("Failed to load districts:", error);
-      setDistricts([]);
-    }
+    setFormData((prev) => ({
+      ...prev,
+      district: selectedDistrict ? selectedDistrict.cityName : "",
+      districtId: selectedDistrictId || 0,
+    }));
   };
-  useEffect(() => {
-    fetchStates();
-
-  }, []);
-  useEffect(() => {
-    if (formData.stateId) {
-      fetchDistricts(formData.stateId);
-    } else {
-      setDistricts([]);
-    }
-  }, [formData.stateId]);
-
 
   const fetchStudentsByClassDivisionAcademicYear = async () => {
-    if (siblingsdropdown.academicYears && siblingsdropdown.classes && siblingsdropdown.divisions) {
+    if (
+      siblingsdropdown.academicYears &&
+      siblingsdropdown.classes &&
+      siblingsdropdown.divisions
+    ) {
       try {
         const response: any = await getStudentsByClassDivisionAcademicYear(
           siblingsdropdown.classes,
           siblingsdropdown.divisions,
-          siblingsdropdown.academicYears,
+          siblingsdropdown.academicYears
         );
         if (response.success) {
-          setStudentOptions(response.data)
-        }
-        else {
+          setStudentOptions(response.data);
+        } else {
           setStudentOptions([]);
           toast.error(response.message);
         }
       } catch (error) {
         console.error("Failed to fetch students:", error);
         setStudentOptions([]);
-
-
       }
     }
   };
+
   useEffect(() => {
     fetchStudentsByClassDivisionAcademicYear();
-  }, [siblingsdropdown.academicYears, siblingsdropdown.classes, siblingsdropdown.divisions]);
-
-
-
+  }, [
+    siblingsdropdown.academicYears,
+    siblingsdropdown.classes,
+    siblingsdropdown.divisions,
+  ]);
 
   const handleStudentSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedStudentId = e.target.value;
     if (!selectedStudentId) return;
 
-
     // Find the selected student from studentOptions
-    const selectedStudent: any = studentOptions.find(student => student._id === selectedStudentId);
+    const selectedStudent: any = studentOptions.find(
+      (student) => student._id === selectedStudentId
+    );
     if (!selectedStudent) return;
 
-
     // Update the form data with the parent info from selected student
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       parentInfo: {
         ...prev.parentInfo,
         fatherName: selectedStudent.parentInfo.fatherName || "",
         motherName: selectedStudent.parentInfo.motherName || "",
-        fatherContactNumber: selectedStudent.parentInfo.fatherContactNumber || "",
-        motherContactNumber: selectedStudent.parentInfo.motherContactNumber || "",
+        fatherContactNumber:
+          selectedStudent.parentInfo.fatherContactNumber || "",
+        motherContactNumber:
+          selectedStudent.parentInfo.motherContactNumber || "",
         fatherOccupation: selectedStudent.parentInfo.fatherOccupation || "",
         motherOccupation: selectedStudent.parentInfo.motherOccupation || "",
         email: selectedStudent.parentInfo.email || "",
-        password: selectedStudent.parentInfo.plainPassword || "", // Don't copy password as it's hashed and shouldn't be exposed
-        // Don't copy password as it's hashed and shouldn't be exposed
-      }
+        password: selectedStudent.parentInfo.plainPassword || "",
+      },
     }));
   };
-
-
-  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedDistrictId = Number(e.target.value);
-    const selectedDistrict: any = districts.find((district: any) => district.id === selectedDistrictId);
-
-    setFormData((prev: any) => ({
-      ...prev,
-      district: selectedDistrict?.name || "",
-      districtId: selectedDistrictId
-    }));
-  };
-
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -326,7 +439,6 @@ const AddStudent: React.FC = () => {
     >
   ) => {
     const { name, value } = e.target;
-
 
     if (name.includes(".")) {
       const [parent, child] = name.split(".");
@@ -342,7 +454,6 @@ const AddStudent: React.FC = () => {
     }
   };
 
-
   const validateForm = () => {
     if (
       !formData.firstName ||
@@ -351,10 +462,10 @@ const AddStudent: React.FC = () => {
       !formData.class ||
       !formData.division ||
       !formData.academicYear ||
-      !formData.parentInfo.fatherName ||
-      !formData.parentInfo.motherName ||
-      !formData.parentInfo.fatherContactNumber ||
-      !formData.parentInfo.motherContactNumber ||
+      !formData.parentInfo?.fatherName ||
+      !formData.parentInfo?.motherName ||
+      !formData.parentInfo?.fatherContactNumber ||
+      !formData.parentInfo?.motherContactNumber ||
       !formData.houseName ||
       !formData.city ||
       !formData.state ||
@@ -369,7 +480,6 @@ const AddStudent: React.FC = () => {
       return false;
     }
 
-
     const contactFields = [
       {
         field: formData.parentInfo.fatherContactNumber,
@@ -381,7 +491,6 @@ const AddStudent: React.FC = () => {
       },
     ];
 
-
     for (const { field, name } of contactFields) {
       if (field && !/^\d{10}$/.test(field)) {
         setMessage({
@@ -391,7 +500,6 @@ const AddStudent: React.FC = () => {
         return false;
       }
     }
-
 
     if (
       formData.guardian.contactNumber &&
@@ -404,11 +512,9 @@ const AddStudent: React.FC = () => {
       return false;
     }
 
-
     const emailFields = [
       { field: formData.parentInfo.email, name: "Parent's email" },
     ];
-
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     for (const { field, name } of emailFields) {
@@ -421,7 +527,6 @@ const AddStudent: React.FC = () => {
       }
     }
 
-
     if (formData.guardian.email && !emailRegex.test(formData.guardian.email)) {
       setMessage({
         text: "Guardian's email is not valid",
@@ -430,7 +535,6 @@ const AddStudent: React.FC = () => {
       return false;
     }
 
-
     if (!formData.parentInfo.password) {
       setMessage({
         text: "Parent's password is required",
@@ -438,7 +542,6 @@ const AddStudent: React.FC = () => {
       });
       return false;
     }
-
 
     if (
       (formData.guardian.guardianName ||
@@ -454,32 +557,37 @@ const AddStudent: React.FC = () => {
       return false;
     }
 
-
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-
     if (!validateForm()) {
       return;
     }
 
-
     setIsLoading(true);
-
 
     try {
       const formDataToSend: any = new FormData();
       console.log("formDataToSend", formDataToSend);
+
       // Append all student data
-      formDataToSend.append("firstName",
+      formDataToSend.append(
+        "firstName",
         formData.firstName
-          ? formData.firstName.charAt(0).toUpperCase() + formData.firstName.slice(1)
+          ? formData.firstName.charAt(0).toUpperCase() +
+              formData.firstName.slice(1)
           : ""
       );
-      formDataToSend.append("lastName", formData.lastName ? formData.lastName.charAt(0).toUpperCase() + formData.lastName.slice(1) : "");
+      formDataToSend.append(
+        "lastName",
+        formData.lastName
+          ? formData.lastName.charAt(0).toUpperCase() +
+              formData.lastName.slice(1)
+          : ""
+      );
       formDataToSend.append("rollNumber", formData.rollNumber || "");
       formDataToSend.append("age", formData.age || "");
       formDataToSend.append("houseName", formData.houseName || "");
@@ -489,6 +597,7 @@ const AddStudent: React.FC = () => {
       formDataToSend.append("district", formData.district || "");
       formDataToSend.append("districtId", formData.districtId || 0);
       formDataToSend.append("country", formData.country || "");
+      formDataToSend.append("countryId", formData.countryId || 0);
       formDataToSend.append("zipCode", formData.zipCode || "");
       formDataToSend.append("class", formData.class || "");
       formDataToSend.append("division", formData.division || "");
@@ -497,7 +606,8 @@ const AddStudent: React.FC = () => {
       formDataToSend.append("gender", formData.gender || Gender.MALE);
       formDataToSend.append("admissionNumber", formData.admissionNumber || "");
       formDataToSend.append("status", formData.status);
-      formDataToSend.append("sibling", String(formData.sibling || false)); // Convert boolean to string
+      formDataToSend.append("sibling", String(formData.sibling || false));
+
       // Append parent info
       formDataToSend.append(
         "parentInfo[fatherName]",
@@ -532,7 +642,6 @@ const AddStudent: React.FC = () => {
         formData.parentInfo?.password || ""
       );
 
-
       // Append guardian info if provided
       if (
         formData.guardian?.guardianName ||
@@ -565,9 +674,7 @@ const AddStudent: React.FC = () => {
         formDataToSend.append("file", file);
       }
 
-
       const response = await createStudent(formDataToSend);
-
 
       if (response.success) {
         console.log("response", response);
@@ -595,30 +702,24 @@ const AddStudent: React.FC = () => {
     }
   };
 
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-
-
-
     try {
       const result = await bulkImportStudents(file);
-      alert(`✅ Uploaded: ${result.data.createdCount}, Skipped: ${result.data.skippedCount}`);
+      alert(
+        `✅ Uploaded: ${result.data.createdCount}, Skipped: ${result.data.skippedCount}`
+      );
       console.log("Skipped Rows:", result.data.skippedRows);
     } catch (err: any) {
       alert("❌ Upload failed: " + err.message);
     }
   };
 
-
-
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-
 
       if (selectedFile.size > 5 * 1024 * 1024) {
         setMessage({
@@ -628,12 +729,10 @@ const AddStudent: React.FC = () => {
         return;
       }
 
-
       setFile(selectedFile);
       setPreviewUrl(URL.createObjectURL(selectedFile));
     }
   };
-
 
   useEffect(() => {
     return () => {
@@ -643,43 +742,45 @@ const AddStudent: React.FC = () => {
     };
   }, [previewUrl]);
 
-
   const downloadTemplateFile = () => {
-    // Replace with your actual sample file URL
-    const sampleFileUrl = 'https://pub-7fbf7a916fc3478da09a51af298a03ab.r2.dev/import-formats/student-import/student_import_format.xlsx';
-    const link = document.createElement('a');
+    const sampleFileUrl =
+      "https://pub-7fbf7a916fc3478da09a51af298a03ab.r2.dev/import-formats/student-import/student_import_format.xlsx";
+    const link = document.createElement("a");
     link.href = sampleFileUrl;
-    link.download = 'student-import-sample.xlsx';
+    link.download = "student-import-sample.xlsx";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
+
   const downloadSampleFile = () => {
-    // Replace with your actual sample file URL
-    const sampleFileUrl = 'https://pub-7fbf7a916fc3478da09a51af298a03ab.r2.dev/import-formats/student-import/sample_student_data_import.xlsx';
-    const link = document.createElement('a');
+    const sampleFileUrl =
+      "https://pub-7fbf7a916fc3478da09a51af298a03ab.r2.dev/import-formats/student-import/sample_student_data_import.xlsx";
+    const link = document.createElement("a");
     link.href = sampleFileUrl;
-    link.download = 'student-import-sample.xlsx';
+    link.download = "student-import-sample.xlsx";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
+
   const calculateAge = (dob: string) => {
     const birthDate = new Date(dob);
     const today = new Date();
 
-
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
 
-
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
       age--;
     }
 
-
     return age.toString();
   };
+
   return (
     <div className="container mx-auto p-2">
       {message && (
@@ -691,13 +792,14 @@ const AddStudent: React.FC = () => {
         />
       )}
 
-
       <div className="container mx-auto p-2">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">
-              {activeTab === 'single' ? 'Create Student' : 'Bulk Import Students'}
+              {activeTab === "single"
+                ? "Create Student"
+                : "Bulk Import Students"}
             </h2>
             <div className="mt-2">
               <Breadcrumb items={breadcrumbItems} />
@@ -714,25 +816,31 @@ const AddStudent: React.FC = () => {
           </div>
         </div>
 
-
         {/* Tab Navigation */}
         <div className="flex border-b mb-6">
           <button
-            className={`px-4 py-2 font-medium ${activeTab === 'single' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
-            onClick={() => setActiveTab('single')}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "single"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500"
+            }`}
+            onClick={() => setActiveTab("single")}
           >
             Add Single Student
           </button>
           <button
-            className={`px-4 py-2 font-medium ${activeTab === 'bulk' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
-            onClick={() => setActiveTab('bulk')}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "bulk"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500"
+            }`}
+            onClick={() => setActiveTab("bulk")}
           >
             Bulk Import
           </button>
         </div>
 
-
-        {activeTab === 'single' ? (
+        {activeTab === "single" ? (
           <form
             onSubmit={handleSubmit}
             className="bg-white p-6 rounded-lg shadow"
@@ -798,10 +906,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -824,10 +936,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -839,27 +955,6 @@ const AddStudent: React.FC = () => {
                   />
                 </div>
 
-
-
-
-                {/* <div className="w-full md:w-1/3 px-2 mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Roll Number <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="rollNumber"
-                  value={formData.rollNumber}
-                  onChange={handleInputChange}
-                  placeholder="Enter roll number"
-                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div> */}
-
-
-
-
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Date of Birth <span className="text-red-500">*</span>
@@ -869,19 +964,16 @@ const AddStudent: React.FC = () => {
                     name="dob"
                     value={formData.dob}
                     onChange={(e) => {
-                      handleInputChange(e); // Call the original handler
+                      handleInputChange(e);
                       if (e.target.value) {
                         const age = calculateAge(e.target.value);
-                        setFormData(prev => ({ ...prev, age }));
+                        setFormData((prev) => ({ ...prev, age }));
                       }
                     }}
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -896,9 +988,6 @@ const AddStudent: React.FC = () => {
                     required
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -917,37 +1006,36 @@ const AddStudent: React.FC = () => {
                   </select>
                 </div>
 
-
-
-
-
-
+                {/* Country Select */}
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Country <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    name="country"
-                    value={formData.country}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                      const key = e.key;
-                      const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
-
-                      if (!isLetter && !allowedKeys.includes(key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="Enter country"
+                  <select
+                    name="countryId"
+                    value={formData.countryId || ""}
+                    onChange={handleCountryChange}
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                  >
+                    <option value="">Select Country</option>
+                    {Array.isArray(countries) &&
+                      countries.map((country) => (
+                        <option
+                          key={country.countrycode}
+                          value={country.countrycode}
+                        >
+                          {country.countryname}
+                        </option>
+                      ))}
+                  </select>
+                  <input
+                    type="hidden"
+                    name="country"
+                    value={formData.country}
                   />
                 </div>
+
                 {/* State Select */}
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -955,25 +1043,22 @@ const AddStudent: React.FC = () => {
                   </label>
                   <select
                     name="stateId"
-                    value={formData.stateId}
+                    value={formData.stateId || ""}
                     onChange={handleStateChange}
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                    disabled={!formData.countryId}
                   >
                     <option value="">Select State</option>
-                    {states.map((state: any) => (
-                      <option key={state.id} value={state.id}>
-                        {state.name}
-                      </option>
-                    ))}
+                    {Array.isArray(states) &&
+                      states.map((state) => (
+                        <option key={state.stateID} value={state.stateID}>
+                          {state.stateName}
+                        </option>
+                      ))}
                   </select>
-                  <input
-                    type="hidden"
-                    name="state"
-                    value={formData.state}
-                  />
+                  <input type="hidden" name="state" value={formData.state} />
                 </div>
-
 
                 {/* District Select */}
                 <div className="w-full md:w-1/3 px-2 mb-4">
@@ -989,23 +1074,19 @@ const AddStudent: React.FC = () => {
                     disabled={!formData.stateId}
                   >
                     <option value="">Select District</option>
-                    {districts.length > 0 ? (
-                      districts.map((district: any) => (
-                        <option key={district.id} value={district.id}>
-                          {district.name}
+                    {Array.isArray(districts) &&
+                      districts.map((district) => (
+                        <option key={district.cityID} value={district.cityID}>
+                          {district.cityName}
                         </option>
-                      ))
-                    ) : (
-                      formData.stateId && <option value="" disabled>No districts found</option>
-                    )}
+                      ))}
                   </select>
                   <input
                     type="hidden"
                     name="district"
-                    value={formData.district || ""}
+                    value={formData.district}
                   />
                 </div>
-
 
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1019,10 +1100,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -1033,11 +1118,6 @@ const AddStudent: React.FC = () => {
                     required
                   />
                 </div>
-
-
-
-
-
 
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1050,12 +1130,13 @@ const AddStudent: React.FC = () => {
                     onChange={handleInputChange}
                     onKeyDown={(e) => {
                       const allowedKeys = [
-                        'Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
                       ];
                       const isNumberKey = /^[0-9]$/.test(e.key);
-
-
-
 
                       if (!isNumberKey && !allowedKeys.includes(e.key)) {
                         e.preventDefault();
@@ -1068,10 +1149,10 @@ const AddStudent: React.FC = () => {
                   />
                 </div>
 
-
                 <div className="w-full px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
-                    House Name/ No./ Building <span className="text-red-500">*</span>
+                    House Name/ No./ Building{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     name="houseName"
@@ -1085,6 +1166,7 @@ const AddStudent: React.FC = () => {
                 </div>
               </div>
             </div>
+
             <div className="w-full px-2 mb-4">
               <div className="flex items-center mb-4">
                 <input
@@ -1094,9 +1176,9 @@ const AddStudent: React.FC = () => {
                   onChange={handleSiblingChange}
                   className="mr-2"
                 />
-                <label className="ml-2 text-gray-700 cursor-pointer">Sibling</label>
-
-
+                <label className="ml-2 text-gray-700 cursor-pointer">
+                  Sibling
+                </label>
               </div>
             </div>
             {formData.sibling && (
@@ -1120,7 +1202,6 @@ const AddStudent: React.FC = () => {
                     </div>
                   </div>
 
-
                   <div className="flex flex-wrap -mx-2">
                     {/* Class Dropdown */}
                     <div className="w-full md:w-1/3 px-2 mb-4">
@@ -1143,7 +1224,6 @@ const AddStudent: React.FC = () => {
                       </select>
                     </div>
 
-
                     {/* Division Dropdown */}
                     <div className="w-full md:w-1/3 px-2 mb-4">
                       <label className="block text-gray-700 text-sm font-medium mb-2">
@@ -1164,7 +1244,6 @@ const AddStudent: React.FC = () => {
                         ))}
                       </select>
                     </div>
-
 
                     {/* Students Dropdown */}
                     <div className="w-full md:w-1/3 px-2 mb-4">
@@ -1190,9 +1269,6 @@ const AddStudent: React.FC = () => {
               </div>
             )}
 
-
-
-
             <div className="mb-4">
               <h4 className="text-lg font-medium border-b pb-2 mb-4 p-2 bg-green-50">
                 Academic Information
@@ -1203,33 +1279,25 @@ const AddStudent: React.FC = () => {
                     Academic Year <span className="text-red-500">*</span>
                   </label>
                   {/* <select
-                  name="academicYear"
-                  value={formData.academicYear}
-                  onChange={handleInputChange}
-                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Academic Year</option>
-                  {academicYears.map((year) => (
-                    <option key={year.id as any} value={year._id}>
-                      {year.academicYear}
-                    </option>
-                  ))}
-                </select> */}
+                   name="academicYear"
+                   value={formData.academicYear}
+                   onChange={handleInputChange}
+                   className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   required
+                 >
+                   <option value="">Select Academic Year</option>
+                   {academicYears.map((year) => (
+                     <option key={year.id as any} value={year._id}>
+                       {year.academicYear}
+                     </option>
+                   ))}
+                 </select> */}
                   <AcademicYearDropdown
                     value={formData.academicYear}
                     onChange={(value) => {
                       setFormData({ ...formData, academicYear: value });
                     }}
                   />
-
-
-
-
-
-
-
-
                 </div>
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1237,7 +1305,7 @@ const AddStudent: React.FC = () => {
                   </label>
                   <select
                     name="class"
-                    value={formData.class}
+                    value={formData.class?.toString() || ""}
                     onChange={handleInputChange}
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
@@ -1251,16 +1319,17 @@ const AddStudent: React.FC = () => {
                   </select>
                 </div>
 
-
-
-
                 <div className="w-full md:w-1/3 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Division <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="division"
-                    value={formData.division}
+                    value={
+                      typeof formData.division === "string"
+                        ? formData.division
+                        : (formData.division as any)?._id || ""
+                    }
                     onChange={handleInputChange}
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
@@ -1288,9 +1357,6 @@ const AddStudent: React.FC = () => {
                     //   ];
                     //   const isNumberKey = /^[0-9]$/.test(e.key);
 
-
-
-
                     //   if (!isNumberKey && !allowedKeys.includes(e.key)) {
                     //     e.preventDefault();
                     //   }
@@ -1300,21 +1366,8 @@ const AddStudent: React.FC = () => {
                     required
                   />
                 </div>
-
-
-
-
               </div>
             </div>
-
-
-
-
-
-
-
-
-
 
             <div className="mb-4">
               <h4 className="text-lg font-medium border-b pb-2 mb-4 p-2 bg-green-50">
@@ -1333,10 +1386,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -1347,9 +1404,6 @@ const AddStudent: React.FC = () => {
                     required
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1363,10 +1417,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -1378,9 +1436,6 @@ const AddStudent: React.FC = () => {
                   />
                 </div>
 
-
-
-
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Father's Contact <span className="text-red-500">*</span>
@@ -1391,11 +1446,14 @@ const AddStudent: React.FC = () => {
                     value={formData.parentInfo.fatherContactNumber}
                     onChange={handleInputChange}
                     onKeyDown={(e) => {
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                      ];
                       const isNumberKey = /^[0-9]$/.test(e.key);
-
-
-
 
                       if (!isNumberKey && !allowedKeys.includes(e.key)) {
                         e.preventDefault();
@@ -1408,9 +1466,6 @@ const AddStudent: React.FC = () => {
                   />
                 </div>
 
-
-
-
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Mother's Contact <span className="text-red-500">*</span>
@@ -1421,11 +1476,14 @@ const AddStudent: React.FC = () => {
                     value={formData.parentInfo.motherContactNumber}
                     onChange={handleInputChange}
                     onKeyDown={(e) => {
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                      ];
                       const isNumberKey = /^[0-9]$/.test(e.key);
-
-
-
 
                       if (!isNumberKey && !allowedKeys.includes(e.key)) {
                         e.preventDefault();
@@ -1437,9 +1495,6 @@ const AddStudent: React.FC = () => {
                     required
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1453,10 +1508,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -1466,9 +1525,6 @@ const AddStudent: React.FC = () => {
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1482,10 +1538,14 @@ const AddStudent: React.FC = () => {
                     onKeyDown={(e) => {
                       const key = e.key;
                       const isLetter = /^[a-zA-Z]$/.test(key);
-                      const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                      const allowedKeys = [
+                        "Backspace",
+                        "Tab",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "Delete",
+                        " ",
+                      ];
 
                       if (!isLetter && !allowedKeys.includes(key)) {
                         e.preventDefault();
@@ -1495,9 +1555,6 @@ const AddStudent: React.FC = () => {
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1513,9 +1570,6 @@ const AddStudent: React.FC = () => {
                     required
                   />
                 </div>
-
-
-
 
                 <div className="w-full md:w-1/2 px-2 mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1534,11 +1588,7 @@ const AddStudent: React.FC = () => {
               </div>
             </div>
 
-
-
             {formData.sibling === false && (
-
-
               <div className="mb-4">
                 <h4 className="text-lg font-medium border-b pb-2 mb-4 p-2 bg-green-50">
                   Guardian Information (Optional)
@@ -1556,10 +1606,14 @@ const AddStudent: React.FC = () => {
                       onKeyDown={(e) => {
                         const key = e.key;
                         const isLetter = /^[a-zA-Z]$/.test(key);
-                        const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                        const allowedKeys = [
+                          "Backspace",
+                          "Tab",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "Delete",
+                          " ",
+                        ];
 
                         if (!isLetter && !allowedKeys.includes(key)) {
                           e.preventDefault();
@@ -1569,9 +1623,6 @@ const AddStudent: React.FC = () => {
                       className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-
-
-
 
                   <div className="w-full md:w-1/2 px-2 mb-4">
                     <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1583,11 +1634,14 @@ const AddStudent: React.FC = () => {
                       value={formData.guardian.contactNumber}
                       onChange={handleInputChange}
                       onKeyDown={(e) => {
-                        const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'];
+                        const allowedKeys = [
+                          "Backspace",
+                          "Tab",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "Delete",
+                        ];
                         const isNumberKey = /^[0-9]$/.test(e.key);
-
-
-
 
                         if (!isNumberKey && !allowedKeys.includes(e.key)) {
                           e.preventDefault();
@@ -1598,9 +1652,6 @@ const AddStudent: React.FC = () => {
                       className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-
-
-
 
                   <div className="w-full md:w-1/2 px-2 mb-4">
                     <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1614,10 +1665,14 @@ const AddStudent: React.FC = () => {
                       onKeyDown={(e) => {
                         const key = e.key;
                         const isLetter = /^[a-zA-Z]$/.test(key);
-                        const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', ' '];
-
-
-
+                        const allowedKeys = [
+                          "Backspace",
+                          "Tab",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "Delete",
+                          " ",
+                        ];
 
                         if (!isLetter && !allowedKeys.includes(key)) {
                           e.preventDefault();
@@ -1627,9 +1682,6 @@ const AddStudent: React.FC = () => {
                       className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-
-
-
 
                   <div className="w-full md:w-1/2 px-2 mb-4">
                     <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -1645,18 +1697,15 @@ const AddStudent: React.FC = () => {
                     />
                   </div>
 
-
-
-
                   <div className="w-full px-2 mb-4">
                     <label className="block text-gray-700 text-sm font-bold mb-2">
                       Guardian's Password
-                      {(formData.guardian.guardianName ||
-                        formData.guardian.contactNumber ||
-                        formData.guardian.relation ||
-                        formData.guardian.email) && (
-                          <span className="text-red-500">*</span>
-                        )}
+                      {(formData.guardian?.guardianName ||
+                        formData.guardian?.contactNumber ||
+                        formData.guardian?.relation ||
+                        formData.guardian?.email) && (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     <input
                       type="password"
@@ -1670,8 +1719,6 @@ const AddStudent: React.FC = () => {
                 </div>
               </div>
             )}
-
-
 
             <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               <Link to="/student-managements/students/">
@@ -1720,38 +1767,9 @@ const AddStudent: React.FC = () => {
                 )}
               </button>
             </div>
-
-
-
-
-            {/* <div className="flex space-x-2 justify-end">
-          <button
-            type="submit"
-            className="submit-btn flex items-center"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <span className="mr-2">Processing...</span>
-            ) : (
-              <>
-                <IoCheckmarkDoneCircleOutline size={22} className="mr-2" />
-                Submit
-              </>
-            )}
-          </button>
-
-
-
-
-          <Link to="/students">
-            <button className="cancel-btn flex items-center">
-              <FcCancel className="mr-2" />
-              Cancel
-            </button>
-          </Link>
-        </div> */}
           </form>
         ) : (
+          // Bulk Import Section (keep as is)
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="mb-6">
               <h3 className="text-lg font-medium mb-2">Bulk Import Students</h3>
@@ -1759,7 +1777,6 @@ const AddStudent: React.FC = () => {
                 Import multiple students at once by uploading an Excel file.
                 Download the sample file to ensure correct formatting.
               </p>
-
 
               <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <div className="w-full md:w-1/2">
@@ -1771,7 +1788,8 @@ const AddStudent: React.FC = () => {
                       </label>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">
-                      Download the template to ensure your data is formatted correctly.
+                      Download the template to ensure your data is formatted
+                      correctly.
                     </p>
                     <button
                       type="button"
@@ -1792,7 +1810,8 @@ const AddStudent: React.FC = () => {
                       </label>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">
-                      Download the sample to ensure your data is formatted correctly.
+                      Download the sample to ensure your data is formatted
+                      correctly.
                     </p>
                     <button
                       type="button"
@@ -1805,7 +1824,6 @@ const AddStudent: React.FC = () => {
                   </div>
                 </div>
 
-
                 <div className="w-full md:w-1/2">
                   <div className="border border-green-100 bg-green-50 rounded-lg p-4 transition-all hover:bg-green-100">
                     <div className="flex items-center gap-2 mb-3">
@@ -1815,7 +1833,8 @@ const AddStudent: React.FC = () => {
                       </label>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">
-                      Upload your Excel file with student data. Max file size: 5MB.
+                      Upload your Excel file with student data. Max file size:
+                      5MB.
                     </p>
                     <label className="block w-full bg-green-100 hover:bg-green-200 text-green-700 py-2 px-4 rounded-md transition-colors cursor-pointer text-center">
                       <input
@@ -1862,22 +1881,39 @@ const AddStudent: React.FC = () => {
                 </div>
               </div>
 
-
               <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg
+                      className="h-5 w-5 text-yellow-400"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800">Important Notes</h3>
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Important Notes
+                    </h3>
                     <div className="mt-2 text-sm text-yellow-700">
                       <ul className="list-disc pl-5 space-y-1">
-                        <li>Ensure all required fields are filled in the Excel file</li>
-                        <li>Follow the format exactly as shown in the sample file</li>
+                        <li>
+                          Ensure all required fields are filled in the Excel
+                          file
+                        </li>
+                        <li>
+                          Follow the format exactly as shown in the sample file
+                        </li>
                         <li>File size should not exceed 5MB</li>
-                        <li>Only .xlsx, .xls, and .ods formats are supported</li>
+                        <li>
+                          Only .xlsx, .xls, and .ods formats are supported
+                        </li>
                       </ul>
                     </div>
                   </div>
@@ -1891,6 +1927,4 @@ const AddStudent: React.FC = () => {
   );
 };
 
-
 export default AddStudent;
-
