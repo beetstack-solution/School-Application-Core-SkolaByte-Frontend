@@ -284,3 +284,29 @@ export const deleteTeacher = async (
     );
   }
 };
+
+// bulkImportTeachers
+export const bulkImportTeachers = async (file: File): Promise<any> => {
+  try {
+    const token = await getAdminBearerToken();
+    if (!token) {
+      throw new Error("Authentication token is missing");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await api.post("/teacher/import-teacher", formData, {
+      headers: {
+        "x-api-key": apikey,
+        "x-app-version": appVersion,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return response.data;
+  } catch (error: any) {
+    console.error("Error importing teachers:", error);
+    throw new Error(error.message || "Import failed.");
+  }
+};

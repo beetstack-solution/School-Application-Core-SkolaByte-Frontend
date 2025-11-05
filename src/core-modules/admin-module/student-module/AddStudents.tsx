@@ -709,7 +709,7 @@ const AddStudent: React.FC = () => {
     try {
       const result = await bulkImportStudents(file);
       alert(
-        `✅ Uploaded: ${result.data.createdCount}, Skipped: ${result.data.skippedCount}`
+        `✅ Uploaded: ${result.data.success}, Total: ${result.data.total}, Failed: ${result.data.failed}`
       );
       console.log("Skipped Rows:", result.data.skippedRows);
     } catch (err: any) {
@@ -744,7 +744,7 @@ const AddStudent: React.FC = () => {
 
   const downloadTemplateFile = () => {
     const sampleFileUrl =
-      "https://pub-7fbf7a916fc3478da09a51af298a03ab.r2.dev/import-formats/student-import/student_import_format.xlsx";
+      "https://pub-c344308476ef469199ac8266ba9ad1f5.r2.dev/student_template.xlsx";
     const link = document.createElement("a");
     link.href = sampleFileUrl;
     link.download = "student-import-sample.xlsx";
@@ -755,7 +755,7 @@ const AddStudent: React.FC = () => {
 
   const downloadSampleFile = () => {
     const sampleFileUrl =
-      "https://pub-7fbf7a916fc3478da09a51af298a03ab.r2.dev/import-formats/student-import/sample_student_data_import.xlsx";
+      "https://pub-c344308476ef469199ac8266ba9ad1f5.r2.dev/student_sample_data.xlsx";
     const link = document.createElement("a");
     link.href = sampleFileUrl;
     link.download = "student-import-sample.xlsx";

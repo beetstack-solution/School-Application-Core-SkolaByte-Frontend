@@ -380,7 +380,7 @@ export const bulkImportStudents = async (file: File) => {
       console.warn('x-school-apikey not found in localStorage');
     }
 
-    const response = await fetch(`${API_BASE_URL}/student/import-student-profile`, {
+    const response = await fetch(`${API_BASE_URL}/student/import-student-data`, {
       method: "POST",
       headers: {
         "x-api-key": apikey,
